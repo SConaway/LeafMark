@@ -13,6 +13,14 @@
 # but never made it to leafmark underneath.)
 set -e
 
+# docker-compose's `restart: unless-stopped` restarts this same container
+# in place rather than recreating it, so /tmp survives across restarts.
+# If the previous run died non-gracefully mid-command, its Xvfb lock file
+# can be left behind even though nothing is actually holding display 99
+# anymore (tini reaped the whole process tree on the way out) — remove it
+# unconditionally, since this container only ever runs one Xvfb at a time.
+rm -f /tmp/.X99-lock /tmp/.X11-unix/X99
+
 Xvfb :99 -screen 0 1280x1024x24 -nolisten tcp &
 export DISPLAY=:99
 
