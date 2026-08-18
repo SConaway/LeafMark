@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LeafMark — Pending matches</title>
+  {{template "style" .}}
+</head>
+<body>
+  <h1>Pending matches</h1>
+  {{if not .Items}}
+    <p class="muted">Nothing waiting on a match right now.</p>
+  {{else}}
+    {{range .Items}}
+      <div class="card">
+        <div><a href="/pending/{{.ID}}"><strong>{{.KoreaderTitle}}</strong></a></div>
+        {{if .KoreaderAuthor}}<div class="muted">{{.KoreaderAuthor}}</div>{{end}}
+        <div class="muted">{{printf "%.0f" .ProgressPct}}% &middot; {{.CreatedAt}}</div>
+      </div>
+    {{end}}
+  {{end}}
+</body>
+</html>

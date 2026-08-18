@@ -1,0 +1,49 @@
+# One-off test run (--once/--dry-run) without starting the daemon:
+#   docker compose run --rm leafmark /usr/local/bin/leafmark --once --dry-run
+# (tini + docker-entrypoint.sh are the image's ENTRYPOINT — Xvfb still
+# gets started either way — so args to `docker compose run`/`run` only
+# need to replace CMD, i.e. just the binary path + flags.)
+
+services:
+  leafmark:
+    build: .
+    container_name: leafmark
+    restart: unless-stopped
+
+    # Automated Goodreads re-login drives a real headed Chromium under
+    # Xvfb (see internal/goodreads/login.go) — Docker's default 64MB
+    # /dev/shm is too small for Chrome and will cause intermittent
+    # crashes.
+    shm_size: "1gb"
+
+    volumes:
+      - ./data:/data
+      # Optional: a mounted secrets file instead of putting credentials in
+      # `environment:` below (which leak into `docker inspect`/`docker
+      # compose config`). chown this file to 52416:52416 (the Dockerfile's
+      # fixed non-root user) before mounting, so the container can read it.
+      # See .env.example for the full var list this file should contain.
+      - ./secrets.env:/run/secrets/leafmark.env:ro
+
+    environment:
+      - LEAFMARK_ENV_FILE=/run/secrets/leafmark.env
+      - DB_PATH=/data/leafmark.db
+      - LISTEN_ADDR=:8080
+      # POLL_INTERVAL and MATCH_THRESHOLD have sane defaults (5m, 0.8) —
+      # override here only if you want something different. Anything set
+      # here takes precedence over the same key in secrets.env.
+
+    # Tailscale-only binding depends on how the rest of your homelab stack
+    # does this (a sidecar tailscale container, `tailscale serve`, an
+    # existing reverse proxy, binding directly to a tailscale0 interface
+    # IP) — deliberately not guessed here. Pick one:
+    #
+    #   Option A — publish directly to a known Tailscale IP:
+    # ports:
+    #   - "100.x.x.x:8080:8080"   # replace with this host's Tailscale IP
+    #
+    #   Option B — no ports here at all; front this service with an
+    #   existing reverse proxy / `tailscale serve` on the same docker
+    #   network, terminating HTTPS elsewhere in your stack. LEAFMARK_BASE_URL
+    #   must still be the public https:// URL LeafMark is reachable at
+    #   through that proxy (used to build ntfy action button URLs).

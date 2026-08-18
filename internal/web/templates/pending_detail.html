@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LeafMark — Match a book</title>
+  {{template "style" .}}
+</head>
+<body>
+  <p><a href="/pending">&larr; All pending matches</a></p>
+
+  {{if .NotOpen}}
+    <h1>Already {{.Status}}</h1>
+    <p class="muted">This pending match was already resolved (possibly from another device/tab).</p>
+  {{else}}
+    <h1>{{.KoreaderTitle}}</h1>
+    {{if .KoreaderAuthor}}<p class="muted">{{.KoreaderAuthor}}</p>{{end}}
+    <p class="muted">Currently at {{printf "%.0f" .ProgressPct}}%</p>
+
+    {{if .Candidates}}
+      <h2>Likely matches</h2>
+      {{range .Candidates}}
+        <div class="card row">
+          <form method="post" action="/confirm" style="flex:1">
+            <input type="hidden" name="pending_match_id" value="{{$.ID}}">
+            <input type="hidden" name="goodreads_book_id" value="{{.GoodreadsBookID}}">
+            <input type="hidden" name="goodreads_title" value="{{.Title}}">
+            <input type="hidden" name="goodreads_author" value="{{.Author}}">
+            <input type="hidden" name="source" value="webui">
+            <div class="row" style="justify-content: space-between">
+              <span><strong>{{.Title}}</strong>{{if .Author}} &mdash; {{.Author}}{{end}}
+                <span class="score">({{printf "%.2f" .Score}})</span></span>
+              <input type="submit" value="Confirm">
+            </div>
+          </form>
+        </div>
+      {{end}}
+    {{end}}
+
+    <h2>Search your shelves</h2>
+    <form method="get" action="/pending/{{.ID}}" class="row">
+      <input type="text" name="q" value="{{.Query}}" placeholder="Search title or author" style="flex:1">
+      <input type="submit" value="Search">
+    </form>
+
+    {{if .SearchResults}}
+      {{range .SearchResults}}
+        <div class="card row">
+          <form method="post" action="/confirm" style="flex:1">
+            <input type="hidden" name="pending_match_id" value="{{$.ID}}">
+            <input type="hidden" name="goodreads_book_id" value="{{.GoodreadsBookID}}">
+            <input type="hidden" name="goodreads_title" value="{{.Title}}">
+            <input type="hidden" name="goodreads_author" value="{{.Author}}">
+            <input type="hidden" name="source" value="webui">
+            <div class="row" style="justify-content: space-between">
+              <span><strong>{{.Title}}</strong>{{if .Author}} &mdash; {{.Author}}{{end}}
+                <span class="score">({{printf "%.2f" .Score}})</span></span>
+              <input type="submit" value="Confirm">
+            </div>
+          </form>
+        </div>
+      {{end}}
+    {{else if .Query}}
+      <p class="muted">No results for "{{.Query}}".</p>
+    {{end}}
+
+    <h2>Or paste a Goodreads book ID directly</h2>
+    <p class="muted">For cases with no decent match above — the numeric ID from a Goodreads book URL, e.g. the <code>40605629</code> in <code>/book/show/40605629-project-hail-mary</code>.</p>
+    <form method="post" action="/confirm" class="manual-form">
+      <input type="hidden" name="pending_match_id" value="{{.ID}}">
+      <input type="hidden" name="source" value="webui">
+      <input type="text" name="goodreads_book_id" placeholder="Goodreads book ID" required>
+      <input type="text" name="goodreads_title" placeholder="Title (optional)">
+      <input type="submit" value="Confirm this ID">
+    </form>
+  {{end}}
+</body>
+</html>
