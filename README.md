@@ -154,8 +154,7 @@ Notes on that command:
 
 **Persistent deployment**, via `docker-compose.yml`. This pulls the image
 from GHCR (built by `.github/workflows/docker-publish.yml` on every push to
-`main`) rather than building locally — log in first if the package is
-private (`docker login ghcr.io`, a PAT with `read:packages` is enough):
+`main`) rather than building locally:
 
 ```sh
 mkdir -p data
@@ -164,8 +163,10 @@ docker compose pull
 docker compose up -d
 ```
 
-See the comments in `docker-compose.yml` for the Tailscale-binding options
-(this varies by homelab setup and is deliberately not assumed for you).
+Tailscale-only binding (a sidecar tailscale container, `tailscale serve`,
+an existing reverse proxy, binding directly to a tailscale0 interface IP)
+varies by homelab setup and is deliberately not assumed for you — wire it
+up in `docker-compose.yml`.
 
 ## Configuration
 
@@ -310,3 +311,12 @@ docker-compose.yml
   automated re-login. Treat it, and any `LEAFMARK_ENV_FILE`/`.env` holding
   it, exactly like any other credential — restrictive file permissions,
   never committed, never logged.
+
+## Credits
+
+- [koreader-sync](https://github.com/nperez0111/koreader-sync) (nperez0111)
+  — the sync server LeafMark polls for reading progress.
+- [piratereads](https://github.com/mariannefeng/piratereads) (mariannefeng)
+  — an unofficial Goodreads wrapper whose reverse-engineering of the public
+  shelf RSS feed shape this project's shelf-fetch was confirmed against
+  (see `internal/goodreads/shelf.go`).
