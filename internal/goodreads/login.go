@@ -96,15 +96,24 @@ func (c *Client) Login(ctx context.Context, user, password string) error {
 		chromedp.DisableGPU,                          // no real GPU inside the container either way
 		chromedp.WindowSize(1280, 900),
 		chromedp.UserDataDir(dir),
-		// Without an explicit target, Chromium's crash handler (crashpad)
-		// derives its database path from $HOME, which doesn't exist for
-		// this container's user (created with --no-create-home) — that
-		// makes crashpad launch with an empty --database argument and die
-		// immediately ("chrome_crashpad_handler: --database is required"),
-		// taking Chrome down with it. Pointing it at the per-run profile
-		// dir sidesteps $HOME entirely; it's writable and already cleaned
-		// up by the defer above.
-		chromedp.Flag("crash-dumps-dir", dir),
+		// Chromium's crash handler (crashpad) derives its database path
+		// from $HOME (well, actually XDG_CONFIG_HOME/XDG_CACHE_HOME on
+		// Linux), which doesn't exist for this container's user (created
+		// with --no-create-home) — that makes crashpad launch with an
+		// empty --database argument and die immediately
+		// ("chrome_crashpad_handler: --database is required"), taking
+		// Chrome down with it. --crash-dumps-dir looks like the fix but
+		// isn't: recent Chromium (128+) ignores it for crashpad's own
+		// database path — it's a known upstream regression, widely
+		// reported against headless-Chrome tooling running in containers.
+		// Pointing $HOME/XDG_*_HOME at the per-run profile dir instead
+		// works because it's the actual mechanism crashpad reads; the dir
+		// is writable and already cleaned up by the defer above.
+		chromedp.Env(
+			"HOME="+dir,
+			"XDG_CONFIG_HOME="+dir,
+			"XDG_CACHE_HOME="+dir,
+		),
 	}
 	allocCtx, cancelAlloc := chromedp.NewExecAllocator(ctx, opts...)
 	defer cancelAlloc()

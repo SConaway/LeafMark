@@ -7,6 +7,7 @@
 services:
   leafmark:
     image: ghcr.io/sconaway/leafmark:latest
+    pull_policy: always
     container_name: leafmark
     restart: unless-stopped
 
