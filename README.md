@@ -152,12 +152,16 @@ Notes on that command:
   either loosen its permissions or add `--user 0:0` for this throwaway
   container.
 
-**Persistent deployment**, via `docker-compose.yml`:
+**Persistent deployment**, via `docker-compose.yml`. This pulls the image
+from GHCR (built by `.github/workflows/docker-publish.yml` on every push to
+`main`) rather than building locally — log in first if the package is
+private (`docker login ghcr.io`, a PAT with `read:packages` is enough):
 
 ```sh
 mkdir -p data
 cp .env.example secrets.env   # fill in real values; chown to 52416:52416 (see below)
-docker compose up -d --build
+docker compose pull
+docker compose up -d
 ```
 
 See the comments in `docker-compose.yml` for the Tailscale-binding options

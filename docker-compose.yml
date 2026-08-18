@@ -6,7 +6,7 @@
 
 services:
   leafmark:
-    build: .
+    image: ghcr.io/sconaway/leafmark:latest
     container_name: leafmark
     restart: unless-stopped
 
@@ -32,18 +32,3 @@ services:
       # POLL_INTERVAL and MATCH_THRESHOLD have sane defaults (5m, 0.8) —
       # override here only if you want something different. Anything set
       # here takes precedence over the same key in secrets.env.
-
-    # Tailscale-only binding depends on how the rest of your homelab stack
-    # does this (a sidecar tailscale container, `tailscale serve`, an
-    # existing reverse proxy, binding directly to a tailscale0 interface
-    # IP) — deliberately not guessed here. Pick one:
-    #
-    #   Option A — publish directly to a known Tailscale IP:
-    # ports:
-    #   - "100.x.x.x:8080:8080"   # replace with this host's Tailscale IP
-    #
-    #   Option B — no ports here at all; front this service with an
-    #   existing reverse proxy / `tailscale serve` on the same docker
-    #   network, terminating HTTPS elsewhere in your stack. LEAFMARK_BASE_URL
-    #   must still be the public https:// URL LeafMark is reachable at
-    #   through that proxy (used to build ntfy action button URLs).
