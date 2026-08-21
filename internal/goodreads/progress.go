@@ -33,10 +33,11 @@ type progressResponse struct {
 //	Cookie: <full raw cookie header>
 //	body: user_status[book_id]=...&user_status[body]=&user_status[percent]=...
 //
-// On a CSRF-shaped failure the cached token is invalidated and the request
-// retried once. On an auth-shaped failure (redirect to sign-in),
-// ErrSessionInvalid is returned immediately with no retry — the caller
-// (the poll loop) is responsible for triggering re-login.
+// On a CSRF-shaped failure (422, or 404 — see postProgress) the cached
+// token is invalidated and the request retried once. On an auth-shaped
+// failure (redirect to sign-in), ErrSessionInvalid is returned immediately
+// with no retry — the caller (the poll loop) is responsible for triggering
+// re-login.
 func (c *Client) UpdateProgress(ctx context.Context, bookID string, percent int) error {
 	log.Printf("goodreads: UpdateProgress(book_id=%s, percent=%d)", bookID, percent)
 
@@ -48,7 +49,7 @@ func (c *Client) UpdateProgress(ctx context.Context, bookID string, percent int)
 
 	err = c.postProgress(ctx, bookID, percent, token)
 	if err == errCSRFRejected {
-		log.Print("goodreads: POST /user_status.json rejected the CSRF token (422) — invalidating and retrying once with a fresh one")
+		log.Print("goodreads: POST /user_status.json rejected the CSRF token (422 or 404) — invalidating and retrying once with a fresh one")
 		c.invalidateCSRFToken()
 		token, err = c.ensureCSRFToken(ctx)
 		if err != nil {
@@ -101,6 +102,16 @@ func (c *Client) postProgress(ctx context.Context, bookID string, percent int, c
 		return ErrSessionInvalid
 	}
 	if resp.StatusCode == http.StatusUnprocessableEntity {
+		return errCSRFRejected
+	}
+	if resp.StatusCode == http.StatusNotFound {
+		// Confirmed against production logs: a stale-but-well-formed CSRF
+		// token gets a plain 404 "Page not found" here rather than the 422
+		// used elsewhere — not a real routing miss (the endpoint definitely
+		// exists; a fresh token against the same URL succeeds). Treat it as
+		// the same CSRF-shaped failure so it goes through the
+		// invalidate-and-retry-once path instead of being logged as a hard
+		// failure while the cache goes on serving the same bad token forever.
 		return errCSRFRejected
 	}
 	if resp.StatusCode != http.StatusOK {

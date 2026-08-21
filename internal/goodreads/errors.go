@@ -14,7 +14,9 @@ var ErrSessionInvalid = errors.New("goodreads: session is no longer valid")
 var ErrNotImplemented = errors.New("goodreads: not implemented")
 
 // errCSRFRejected is an internal signal (never returned to callers) meaning
-// a request was rejected specifically for a stale/invalid CSRF token, as
-// opposed to an auth-shaped failure. UpdateProgress uses it to decide
-// whether to invalidate-and-retry once versus fail immediately.
+// a request was rejected specifically for a stale/invalid CSRF token (a 422,
+// or — confirmed against production logs — a 404 "Page not found" on
+// /user_status.json), as opposed to an auth-shaped failure. UpdateProgress
+// uses it to decide whether to invalidate-and-retry once versus fail
+// immediately.
 var errCSRFRejected = errors.New("goodreads: csrf token rejected")

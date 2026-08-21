@@ -86,6 +86,39 @@ func TestUpdateProgressRetriesOnceOnStaleCSRFToken(t *testing.T) {
 	}
 }
 
+func TestUpdateProgressRetriesOnceOn404StaleCSRFToken(t *testing.T) {
+	var csrfFetches, posts int32
+
+	c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/user/show/999":
+			n := atomic.AddInt32(&csrfFetches, 1)
+			io.WriteString(w, csrfPage(map[int32]string{1: "tok-1", 2: "tok-2"}[n]))
+		case r.URL.Path == "/user_status.json":
+			n := atomic.AddInt32(&posts, 1)
+			if n == 1 {
+				w.WriteHeader(http.StatusNotFound)
+				io.WriteString(w, "Page not found")
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			io.WriteString(w, `{"updatedAt":"2026-01-01T00:00:00Z","finalPosition":50,"currentPosition":50,"positionType":"percent"}`)
+		default:
+			t.Fatalf("unexpected request to %s", r.URL.Path)
+		}
+	})
+
+	if err := c.UpdateProgress(context.Background(), "1", 50); err != nil {
+		t.Fatalf("UpdateProgress: %v", err)
+	}
+	if csrfFetches != 2 {
+		t.Errorf("expected 2 csrf fetches (initial + after invalidate), got %d", csrfFetches)
+	}
+	if posts != 2 {
+		t.Errorf("expected 2 post attempts, got %d", posts)
+	}
+}
+
 func TestUpdateProgressPersistentCSRFRejectionBecomesSessionInvalid(t *testing.T) {
 	c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		switch {
