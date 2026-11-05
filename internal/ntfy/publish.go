@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -100,7 +101,8 @@ func (c *Client) Publish(ctx context.Context, n Notification) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("ntfy: publish: unexpected status %d", resp.StatusCode)
+		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		return fmt.Errorf("ntfy: publish: unexpected status %d: %s", resp.StatusCode, strings.TrimSpace(string(msg)))
 	}
 	return nil
 }

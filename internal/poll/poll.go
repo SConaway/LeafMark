@@ -278,8 +278,16 @@ func (p *Poller) clearSessionAlert() {
 // match: up to 3 http actions (one per candidate, posting to /confirm with
 // clear:true) plus one view action linking to the WebUI page.
 func (p *Poller) notifyPendingMatch(ctx context.Context, doc koreader.Document, pm *db.PendingMatch) error {
-	actions := make([]ntfy.Action, 0, len(pm.Candidates)+1)
-	for _, c := range pm.Candidates {
+	// ntfy allows at most 3 actions per notification (a 4th gets an HTTP
+	// 400), and one slot is reserved for "Choose manually" below. The web UI
+	// still shows every candidate.
+	const maxCandidateActions = 2
+	candidates := pm.Candidates
+	if len(candidates) > maxCandidateActions {
+		candidates = candidates[:maxCandidateActions]
+	}
+	actions := make([]ntfy.Action, 0, len(candidates)+1)
+	for _, c := range candidates {
 		body, err := json.Marshal(map[string]any{
 			"pending_match_id":  pm.ID,
 			"goodreads_book_id": c.GoodreadsBookID,
