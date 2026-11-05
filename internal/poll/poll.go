@@ -145,6 +145,15 @@ func (p *Poller) fetchCombinedShelf(ctx context.Context) ([]goodreads.ShelfBook,
 	var all []goodreads.ShelfBook
 	for _, shelf := range []goodreads.ShelfName{goodreads.ShelfWantToRead, goodreads.ShelfCurrentlyReading} {
 		books, err := p.Goodreads.FetchShelf(ctx, shelf)
+		if errors.Is(err, goodreads.ErrSessionInvalid) && p.Relogin != nil {
+			// The shelf pages need a logged-in session; log in lazily
+			// (startup login may have failed) and retry once.
+			log.Print("poll: shelf fetch came back session-invalid, triggering automated Goodreads re-login")
+			if reloginErr := p.Relogin(ctx); reloginErr != nil {
+				return nil, fmt.Errorf("session invalid, relogin also failed: %w", reloginErr)
+			}
+			books, err = p.Goodreads.FetchShelf(ctx, shelf)
+		}
 		if err != nil {
 			return nil, err
 		}

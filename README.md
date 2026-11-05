@@ -179,7 +179,7 @@ missing or invalid is reported together at startup, not one at a time.
 |---|---|---|---|
 | `GOODREADS_USER` | yes | — | Goodreads login email |
 | `GOODREADS_PASSWORD` | yes | — | Goodreads login password |
-| `GOODREADS_USER_ID` | yes | — | Numeric Goodreads user ID (from your profile URL) |
+| `GOODREADS_USER_ID` | yes | — | Goodreads user ID from your profile URL (`187069697` or `187069697-your-name`) |
 | `KOREADER_SYNC_URL` | yes | — | Base URL of the koreader-sync server |
 | `KOREADER_SYNC_USERNAME` | yes | — | koreader-sync account username |
 | `KOREADER_SYNC_PASSWORD` | yes | — | koreader-sync account password |
@@ -206,13 +206,10 @@ authenticated page, cached, re-scraped on rejection) **and** the full raw
 
 ### Goodreads shelf fetch
 
-Needs **no authentication at all** — it's Goodreads' public
-`review/list_rss` feed, confirmed by reading
-[piratereads](https://github.com/mariannefeng/piratereads)'s source. This
-only works if your want-to-read/currently-reading shelves are set to
-public; a private shelf fails (empty/404) rather than erroring loudly, so
-this is worth double-checking directly if matches mysteriously never
-happen.
+Goodreads removed its public `review/list_rss` feed, so shelves are read by
+scraping the HTML shelf page (`/review/list/{user_id}?shelf=…&per_page=100`,
+following pagination) using the logged-in session cookie. A sign-in redirect
+triggers an automated re-login and one retry.
 
 ### KOReader contract
 

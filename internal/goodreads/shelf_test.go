@@ -2,6 +2,7 @@ package goodreads
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -17,19 +18,27 @@ func newTestClient(t *testing.T, handler http.HandlerFunc) (*Client, *httptest.S
 	return c, ts
 }
 
-func TestFetchShelfParsesRSSAndExtractsBookID(t *testing.T) {
-	fixture, err := os.ReadFile("testdata/currently-reading.xml")
+func TestFetchShelfParsesHTMLAndPaginates(t *testing.T) {
+	fixture, err := os.ReadFile("testdata/shelf-page.html")
 	if err != nil {
 		t.Fatalf("read fixture: %v", err)
 	}
 
-	var gotPath string
+	var pages []string
 	c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		gotPath = r.URL.Path
+		if r.URL.Path != "/review/list/999" {
+			t.Errorf("unexpected path %q", r.URL.Path)
+		}
 		if r.URL.Query().Get("shelf") != "currently-reading" {
 			t.Errorf("expected shelf=currently-reading, got %q", r.URL.Query().Get("shelf"))
 		}
-		w.Header().Set("Content-Type", "application/rss+xml")
+		page := r.URL.Query().Get("page")
+		pages = append(pages, page)
+		if page == "2" {
+			// Last page: no next link, no rows.
+			w.Write([]byte("<html><body><table id=\"books\"></table></body></html>"))
+			return
+		}
 		w.Write(fixture)
 	})
 
@@ -37,22 +46,32 @@ func TestFetchShelfParsesRSSAndExtractsBookID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FetchShelf: %v", err)
 	}
-
-	if gotPath != "/review/list_rss/999" {
-		t.Errorf("expected path /review/list_rss/999, got %q", gotPath)
+	if len(pages) != 2 {
+		t.Errorf("expected 2 page requests, got %v", pages)
 	}
-
-	// The fixture has 3 items but one has no parseable book ID and should
-	// be skipped rather than failing the whole fetch.
-	if len(books) != 2 {
-		t.Fatalf("expected 2 books (malformed entry skipped), got %d: %+v", len(books), books)
+	if len(books) != 3 {
+		t.Fatalf("expected 3 books, got %d: %+v", len(books), books)
 	}
-
-	if books[0].GoodreadsBookID != "54493401" || books[0].Title != "Project Hail Mary" || books[0].Author != "Andy Weir" {
-		t.Errorf("unexpected first book: %+v", books[0])
+	want := ShelfBook{GoodreadsBookID: "15839976", Title: "Red Rising", Author: "Pierce Brown"}
+	if books[0] != want {
+		t.Errorf("first book = %+v, want %+v", books[0], want)
 	}
-	if books[1].GoodreadsBookID != "19161852" {
-		t.Errorf("unexpected second book id: %+v", books[1])
+	if books[2].Author != "Dennis E. Taylor" || books[2].GoodreadsBookID != "32109569" {
+		t.Errorf("unexpected third book: %+v", books[2])
+	}
+}
+
+func TestFetchShelfSignInRedirectIsSessionInvalid(t *testing.T) {
+	c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/user/sign_in" {
+			w.Write([]byte("sign in"))
+			return
+		}
+		http.Redirect(w, r, "/user/sign_in", http.StatusFound)
+	})
+	_, err := c.FetchShelf(context.Background(), ShelfWantToRead)
+	if !errors.Is(err, ErrSessionInvalid) {
+		t.Fatalf("expected ErrSessionInvalid, got %v", err)
 	}
 }
 
@@ -64,6 +83,19 @@ func TestFetchShelfNonOKStatus(t *testing.T) {
 	_, err := c.FetchShelf(context.Background(), ShelfWantToRead)
 	if err == nil {
 		t.Fatal("expected error on 404, got nil")
+	}
+}
+
+func TestFlipAuthor(t *testing.T) {
+	cases := map[string]string{
+		"Brown, Pierce": "Pierce Brown",
+		"Cher":          "Cher",
+		"  Weir,  Andy": "Andy Weir",
+	}
+	for in, want := range cases {
+		if got := flipAuthor(in); got != want {
+			t.Errorf("flipAuthor(%q) = %q, want %q", in, got, want)
+		}
 	}
 }
 
