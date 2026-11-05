@@ -327,3 +327,31 @@ func TestRunOnceIgnoredDocIsSkipped(t *testing.T) {
 		t.Errorf("expected no pending match, err=%v", err)
 	}
 }
+
+func TestResendOpenPendingNotifiesOnlyOpenMatches(t *testing.T) {
+	database := openTestDB(t)
+	ctx := context.Background()
+	notifier := &mockNotifier{}
+	p := newTestPoller(t, database, &mockKOReader{}, &mockGoodreads{}, notifier)
+
+	for _, h := range []string{"doc-1", "doc-2"} {
+		if err := db.UpsertDocument(ctx, database, h, "Book "+h, ""); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := db.CreatePendingMatch(ctx, database, "doc-1", 10, nil); err != nil {
+		t.Fatal(err)
+	}
+	pm2, err := db.CreatePendingMatch(ctx, database, "doc-2", 20, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.DismissPendingMatch(ctx, database, pm2.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	sent, failed := p.ResendOpenPending(ctx)
+	if sent != 1 || failed != 0 || notifier.count() != 1 {
+		t.Fatalf("sent=%d failed=%d published=%d, want 1/0/1", sent, failed, notifier.count())
+	}
+}

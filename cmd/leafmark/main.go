@@ -110,6 +110,12 @@ func main() {
 		}
 	}()
 
+	// Re-send notifications for anything still awaiting a match, before the
+	// first poll so a match it creates isn't notified twice.
+	if sent, failed := poller.ResendOpenPending(ctx); sent+failed > 0 {
+		log.Printf("leafmark: startup: re-sent %d pending-match notification(s), %d failed", sent, failed)
+	}
+
 	go runPollLoop(ctx, poller, cfg.PollInterval)
 
 	<-ctx.Done()

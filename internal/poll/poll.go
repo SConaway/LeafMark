@@ -352,3 +352,34 @@ func truncateLabel(s string) string {
 	}
 	return s[:max-1] + "…"
 }
+
+// ResendOpenPending re-publishes the ntfy notification for every open
+// pending match. Called once at startup so a pending match whose original
+// notification was lost (failed publish, crash, restart) isn't silently
+// stranded — the poller never re-notifies an already-open match itself.
+// Failures are logged and counted; the rest are still sent.
+func (p *Poller) ResendOpenPending(ctx context.Context) (sent, failed int) {
+	matches, err := db.ListOpenPendingMatches(ctx, p.DB)
+	if err != nil {
+		log.Printf("poll: list open pending matches for resend: %v", err)
+		return 0, 0
+	}
+	for i := range matches {
+		pm := &matches[i]
+		title, author := pm.DocHash, ""
+		if doc, err := db.GetDocument(ctx, p.DB, pm.DocHash); err == nil {
+			title, author = doc.KoreaderTitle, doc.KoreaderAuthor.String
+		}
+		n, err := BuildPendingNotification(p.BaseURL, title, author, int(pm.ProgressPct), pm)
+		if err == nil {
+			err = p.Notifier.Publish(ctx, n)
+		}
+		if err != nil {
+			log.Printf("poll: resend notification for pending %d: %v", pm.ID, err)
+			failed++
+			continue
+		}
+		sent++
+	}
+	return sent, failed
+}
