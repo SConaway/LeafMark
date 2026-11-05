@@ -97,7 +97,7 @@ func main() {
 		return
 	}
 
-	webServer, err := web.NewServer(database, gr, cfg.LeafMarkBaseURL)
+	webServer, err := web.NewServer(database, gr, notifier, cfg.LeafMarkBaseURL)
 	if err != nil {
 		log.Fatalf("leafmark: build web server: %v", err)
 	}

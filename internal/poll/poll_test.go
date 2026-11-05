@@ -301,3 +301,29 @@ var errBoom = &testError{"boom"}
 type testError struct{ s string }
 
 func (e *testError) Error() string { return e.s }
+
+func TestRunOnceIgnoredDocIsSkipped(t *testing.T) {
+	database := openTestDB(t)
+	ctx := context.Background()
+
+	gr := &mockGoodreads{}
+	kor := &mockKOReader{ok: true, doc: koreader.Document{DocHash: "doc-1", Title: "Some PDF", Percent: 10}}
+	notifier := &mockNotifier{}
+	p := newTestPoller(t, database, kor, gr, notifier)
+
+	if err := db.UpsertDocument(ctx, database, "doc-1", "Some PDF", ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.IgnoreDocument(ctx, database, "doc-1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := p.RunOnce(ctx); err != nil {
+		t.Fatalf("RunOnce: %v", err)
+	}
+	if notifier.count() != 0 || gr.callCount() != 0 {
+		t.Errorf("ignored doc produced notifications=%d pushes=%d", notifier.count(), gr.callCount())
+	}
+	if _, err := db.GetOpenPendingMatchByDocHash(ctx, database, "doc-1"); err != db.ErrNotFound {
+		t.Errorf("expected no pending match, err=%v", err)
+	}
+}

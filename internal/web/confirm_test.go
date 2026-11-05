@@ -15,14 +15,20 @@ import (
 )
 
 func newTestServer(t *testing.T) (*Server, *sql.DB, *mockGoodreads) {
+	s, database, gr, _ := newTestServerWithNotifier(t)
+	return s, database, gr
+}
+
+func newTestServerWithNotifier(t *testing.T) (*Server, *sql.DB, *mockGoodreads, *mockNotifier) {
 	t.Helper()
 	database := openTestDB(t)
 	gr := &mockGoodreads{}
-	s, err := NewServer(database, gr, "https://leafmark.example.ts.net")
+	n := &mockNotifier{}
+	s, err := NewServer(database, gr, n, "https://leafmark.example.ts.net")
 	if err != nil {
 		t.Fatalf("NewServer: %v", err)
 	}
-	return s, database, gr
+	return s, database, gr, n
 }
 
 func TestConfirmJSONResolvesAndPushes(t *testing.T) {

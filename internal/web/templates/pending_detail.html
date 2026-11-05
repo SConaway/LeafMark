@@ -37,6 +37,11 @@
       {{end}}
     {{end}}
 
+    <div class="row">
+      <form method="post" action="/pending/{{.ID}}/resend"><input type="submit" value="Resend notification"></form>
+      <form method="post" action="/pending/{{.ID}}/ignore" onsubmit="return confirm('Ignore this document? LeafMark will stop tracking it.')"><input type="submit" class="secondary" value="Not a book — ignore"></form>
+    </div>
+
     <h2>Search your shelves</h2>
     <form method="get" action="/pending/{{.ID}}" class="row">
       <input type="text" name="q" value="{{.Query}}" placeholder="Search title or author" style="flex:1">

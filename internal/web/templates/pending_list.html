@@ -8,6 +8,7 @@
 </head>
 <body>
   <h1>Pending matches</h1>
+  {{if .Resent}}<p class="muted">Notification(s) re-sent: {{.Resent}}{{if .Failed}} &middot; <strong>{{.Failed}} failed</strong> (see logs){{end}}.</p>{{end}}
   {{if not .Items}}
     <p class="muted">Nothing waiting on a match right now.</p>
   {{else}}
@@ -16,6 +17,21 @@
         <div><a href="/pending/{{.ID}}"><strong>{{.KoreaderTitle}}</strong></a></div>
         {{if .KoreaderAuthor}}<div class="muted">{{.KoreaderAuthor}}</div>{{end}}
         <div class="muted">{{printf "%.0f" .ProgressPct}}% &middot; {{.CreatedAt}}</div>
+        <div class="row" style="margin-top:0.5rem">
+          <form method="post" action="/pending/{{.ID}}/resend"><input type="submit" value="Resend notification"></form>
+          <form method="post" action="/pending/{{.ID}}/ignore" onsubmit="return confirm('Ignore this document? LeafMark will stop tracking it.')"><input type="submit" class="secondary" value="Not a book — ignore"></form>
+        </div>
+      </div>
+    {{end}}
+    <form method="post" action="/pending/resend-all"><input type="submit" value="Resend all notifications"></form>
+  {{end}}
+
+  {{if .Ignored}}
+    <h2>Ignored documents</h2>
+    {{range .Ignored}}
+      <div class="card row" style="justify-content: space-between">
+        <span><strong>{{.Title}}</strong>{{if .Author}} <span class="muted">&mdash; {{.Author}}</span>{{end}}</span>
+        <form method="post" action="/ignored/{{.DocHash}}/restore"><input type="submit" class="secondary" value="Restore"></form>
       </div>
     {{end}}
   {{end}}

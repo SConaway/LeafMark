@@ -60,3 +60,10 @@ CREATE UNIQUE INDEX idx_pending_one_open_per_doc
 
 CREATE INDEX IF NOT EXISTS idx_pending_status ON pending_matches (status);
 CREATE INDEX IF NOT EXISTS idx_sync_state_last_synced ON sync_state (last_synced_at);
+
+-- Documents the user marked "not a real book" in the WebUI. The poller skips
+-- these entirely: no matching, no pending match, no notification.
+CREATE TABLE IF NOT EXISTS ignored_documents (
+    doc_hash   TEXT PRIMARY KEY REFERENCES documents(doc_hash) ON DELETE CASCADE,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);

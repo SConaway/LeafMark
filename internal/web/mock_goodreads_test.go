@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"leafmark/internal/goodreads"
+	"leafmark/internal/ntfy"
 )
 
 // mockGoodreads is a minimal in-memory stand-in for goodreads.Goodreads so
@@ -42,4 +43,22 @@ func (m *mockGoodreads) calls() []updateProgressCall {
 	out := make([]updateProgressCall, len(m.updateCalls))
 	copy(out, m.updateCalls)
 	return out
+}
+
+type mockNotifier struct {
+	mu            sync.Mutex
+	notifications []ntfy.Notification
+}
+
+func (m *mockNotifier) Publish(ctx context.Context, n ntfy.Notification) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.notifications = append(m.notifications, n)
+	return nil
+}
+
+func (m *mockNotifier) count() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return len(m.notifications)
 }

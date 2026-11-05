@@ -65,6 +65,14 @@ func (p *Poller) RunOnce(ctx context.Context) error {
 		return fmt.Errorf("poll: upsert document: %w", err)
 	}
 
+	ignored, err := db.IsIgnored(ctx, p.DB, doc.DocHash)
+	if err != nil {
+		return fmt.Errorf("poll: check ignored: %w", err)
+	}
+	if ignored {
+		return nil // marked "not a book" in the WebUI
+	}
+
 	if !p.progressChanged(ctx, doc) {
 		return nil
 	}
@@ -275,9 +283,20 @@ func (p *Poller) clearSessionAlert() {
 }
 
 // notifyPendingMatch publishes the ntfy notification for a fresh pending
-// match: up to 3 http actions (one per candidate, posting to /confirm with
-// clear:true) plus one view action linking to the WebUI page.
+// match.
 func (p *Poller) notifyPendingMatch(ctx context.Context, doc koreader.Document, pm *db.PendingMatch) error {
+	n, err := BuildPendingNotification(p.BaseURL, doc.Title, doc.Author, doc.Percent, pm)
+	if err != nil {
+		return err
+	}
+	return p.Notifier.Publish(ctx, n)
+}
+
+// BuildPendingNotification builds the ntfy notification for a pending
+// match: up to 2 http actions (one per candidate, posting to /confirm with
+// clear:true) plus one view action linking to the WebUI page. Exported so
+// the WebUI can re-send it on demand.
+func BuildPendingNotification(baseURL, title, author string, percent int, pm *db.PendingMatch) (ntfy.Notification, error) {
 	// ntfy allows at most 3 actions per notification (a 4th gets an HTTP
 	// 400), and one slot is reserved for "Choose manually" below. The web UI
 	// still shows every candidate.
@@ -296,12 +315,12 @@ func (p *Poller) notifyPendingMatch(ctx context.Context, doc koreader.Document, 
 			"source":            "ntfy_action",
 		})
 		if err != nil {
-			return err
+			return ntfy.Notification{}, err
 		}
 		actions = append(actions, ntfy.Action{
 			Action:  "http",
 			Label:   truncateLabel(c.Title),
-			URL:     p.BaseURL + "/confirm",
+			URL:     baseURL + "/confirm",
 			Method:  "POST",
 			Headers: map[string]string{"Content-Type": "application/json"},
 			Body:    string(body),
@@ -311,19 +330,19 @@ func (p *Poller) notifyPendingMatch(ctx context.Context, doc koreader.Document, 
 	actions = append(actions, ntfy.Action{
 		Action: "view",
 		Label:  "Choose manually",
-		URL:    fmt.Sprintf("%s/pending/%d", p.BaseURL, pm.ID),
+		URL:    fmt.Sprintf("%s/pending/%d", baseURL, pm.ID),
 	})
 
-	message := fmt.Sprintf("Currently at %d%%", doc.Percent)
-	if doc.Author != "" {
-		message = fmt.Sprintf("%s — %s", doc.Author, message)
+	message := fmt.Sprintf("Currently at %d%%", percent)
+	if author != "" {
+		message = fmt.Sprintf("%s — %s", author, message)
 	}
 
-	return p.Notifier.Publish(ctx, ntfy.Notification{
-		Title:   "LeafMark: match needed — " + doc.Title,
+	return ntfy.Notification{
+		Title:   "LeafMark: match needed — " + title,
 		Message: message,
 		Actions: actions,
-	})
+	}, nil
 }
 
 func truncateLabel(s string) string {

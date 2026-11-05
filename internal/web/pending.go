@@ -21,7 +21,10 @@ type pendingListItem struct {
 }
 
 type pendingListView struct {
-	Items []pendingListItem
+	Items   []pendingListItem
+	Ignored []db.IgnoredDocument
+	Resent  string // from ?resent=N, for the banner
+	Failed  string // from ?failed=N
 }
 
 // handlePendingList implements GET /pending — a cold-open index of every
@@ -45,6 +48,14 @@ func (s *Server) handlePendingList(w http.ResponseWriter, r *http.Request) {
 			ID: pm.ID, DocHash: pm.DocHash, KoreaderTitle: title, KoreaderAuthor: author,
 			ProgressPct: pm.ProgressPct, CreatedAt: pm.CreatedAt,
 		})
+	}
+
+	view.Resent = r.URL.Query().Get("resent")
+	if f := r.URL.Query().Get("failed"); f != "" && f != "0" {
+		view.Failed = f
+	}
+	if ignored, err := db.ListIgnoredDocuments(ctx, s.db); err == nil {
+		view.Ignored = ignored
 	}
 
 	s.render(w, "pending_list.html", view)
