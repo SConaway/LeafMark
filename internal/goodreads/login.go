@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -135,9 +136,19 @@ func (c *Client) Login(ctx context.Context, user, password string) error {
 		logStep("waiting for the email field to render"),
 		chromedp.WaitVisible(emailSelector, chromedp.ByID),
 		logStep("filling in email"),
+		chromedp.Click(emailSelector, chromedp.ByID),
 		chromedp.SendKeys(emailSelector, user, chromedp.ByID),
+		logStep("waiting for the password field to render"),
+		// SendKeys types into whatever element has focus; if the password
+		// field is hidden or not yet laid out, focus stays on the email
+		// field and the password gets typed into it. So wait for it to be
+		// visible and explicitly click it first.
+		chromedp.WaitVisible(passSelector, chromedp.ByID),
 		logStep("filling in password"),
+		chromedp.Click(passSelector, chromedp.ByID),
 		chromedp.SendKeys(passSelector, password, chromedp.ByID),
+		logStep("verifying field contents"),
+		verifyFields(len(user), len(password)),
 		logStep("submitting sign-in form"),
 		chromedp.Click(submitSelector, chromedp.ByID),
 		logStep("waiting for sign-in to complete"),
@@ -186,10 +197,18 @@ func waitForSignInOutcome() chromedp.Action {
 	return chromedp.ActionFunc(func(ctx context.Context) error {
 		deadline := time.Now().Add(20 * time.Second)
 		var lastLoc string
+		dumped := false
 		for {
 			var loc string
 			if err := chromedp.Location(&loc).Do(ctx); err != nil {
 				return err
+			}
+			// Dump what the page is actually showing (CAPTCHA? OTP? error
+			// banner?) a few seconds in, while the browser context is still
+			// alive, so a stuck login is diagnosable from the logs.
+			if !dumped && time.Until(deadline) < 12*time.Second {
+				dumped = true
+				dumpPage(ctx)
 			}
 			if loc != lastLoc {
 				log.Printf("goodreads: login: current location: %s", loc)
@@ -209,6 +228,52 @@ func waitForSignInOutcome() chromedp.Action {
 			}
 		}
 	})
+}
+
+// verifyFields fails fast if the email/password inputs don't hold exactly
+// what was typed (e.g. the password leaked into the email field).
+func verifyFields(userLen, passLen int) chromedp.Action {
+	return chromedp.ActionFunc(func(ctx context.Context) error {
+		var gotUser, gotPass int
+		if err := chromedp.Evaluate(`document.querySelector("#ap_email").value.length`, &gotUser).Do(ctx); err != nil {
+			return err
+		}
+		if err := chromedp.Evaluate(`document.querySelector("#ap_password").value.length`, &gotPass).Do(ctx); err != nil {
+			return err
+		}
+		log.Printf("goodreads: login: field lengths: email=%d (want %d), password=%d (want %d)", gotUser, userLen, gotPass, passLen)
+		if gotUser != userLen || gotPass != passLen {
+			return fmt.Errorf("sign-in fields hold the wrong contents (email %d/%d chars, password %d/%d chars)", gotUser, userLen, gotPass, passLen)
+		}
+		return nil
+	})
+}
+
+// dumpPage logs the page title and visible text, and saves a screenshot to
+// the OS temp dir, as best-effort diagnostics. Never returns an error.
+func dumpPage(ctx context.Context) {
+	dctx, cancel := context.WithTimeout(ctx, 8*time.Second)
+	defer cancel()
+	var title, text string
+	var shot []byte
+	err := chromedp.Run(dctx,
+		chromedp.Title(&title),
+		chromedp.Evaluate(`document.body ? document.body.innerText.slice(0, 1500) : ""`, &text),
+		chromedp.FullScreenshot(&shot, 80),
+	)
+	if err != nil {
+		log.Printf("goodreads: login: diagnostics partially failed: %v", err)
+	}
+	log.Printf("goodreads: login: page title=%q", title)
+	log.Printf("goodreads: login: page text=%q", strings.Join(strings.Fields(text), " "))
+	if len(shot) > 0 {
+		path := filepath.Join(os.TempDir(), "leafmark-login-failure.png")
+		if werr := os.WriteFile(path, shot, 0o644); werr != nil {
+			log.Printf("goodreads: login: could not save screenshot: %v", werr)
+		} else {
+			log.Printf("goodreads: login: saved screenshot to %s", path)
+		}
+	}
 }
 
 // buildCookieHeader joins harvested browser cookies into the raw "Cookie:"
